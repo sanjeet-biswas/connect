@@ -1,0 +1,276 @@
+<div class="vaultx-container">
+  <div class="vaultx-header">
+    <div class="search-bar">
+      <i class="fas fa-search"></i>
+      <input 
+        type="text" 
+        [(ngModel)]="searchQuery" 
+        (input)="onSearch()" 
+        placeholder="Search items..."
+      >
+    </div>
+    <div class="view-options">
+      <button class="view-toggle" (click)="toggleView()">
+        <i class="fas" [class.fa-th-large]="isGridView" [class.fa-list]="!isGridView"></i>
+      </button>
+      <button class="view-toggle" (click)="toggleTheme()">
+        <i class="fas" [class.fa-sun]="!isDarkMode" [class.fa-moon]="isDarkMode"></i>
+      </button>
+    </div>
+  </div>
+
+  <div class="create-new-section">
+    <div class="quick-actions">
+      <button class="quick-action-btn" (click)="openQuickAction('document')">
+        <i class="fas fa-file-alt"></i>
+        <span>New Document</span>
+      </button>
+      <button class="quick-action-btn" (click)="openQuickAction('link')">
+        <i class="fas fa-link"></i>
+        <span>New Link</span>
+      </button>
+      <button class="quick-action-btn" (click)="openQuickAction('credential')">
+        <i class="fas fa-key"></i>
+        <span>New Credential</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="vaultx-content">
+    <div *ngIf="isLoading" class="loading-spinner">
+      <i class="fas fa-spinner fa-spin"></i>
+      <p>Loading items...</p>
+    </div>
+
+    <div *ngIf="error" class="error-message">
+      <i class="fas fa-exclamation-circle"></i>
+      <p>{{ error }}</p>
+      <button class="retry-btn" (click)="retryOperation()">
+        <i class="fas fa-redo"></i> Retry
+      </button>
+    </div>
+
+    <div *ngIf="!isLoading && !error" 
+         cdkDropList 
+         [cdkDropListData]="filteredItems"
+         (cdkDropListDropped)="onDrop($event)"
+         class="items-grid"
+         [class.list-view]="!isGridView">
+      <div *ngFor="let item of filteredItems" 
+           class="item-card dark-theme"
+           (click)="viewItem(item)"
+           cdkDrag>
+        <div class="item-header">
+          <div class="item-title-section">
+            <i class="fas" 
+               [class.fa-file-alt]="item.type === 'document'"
+               [class.fa-link]="item.type === 'link'"
+               [class.fa-key]="item.type === 'credential'"
+               [class.fa-file]="!item.type"></i>
+            <h3 class="item-title">{{ item.title }}</h3>
+          </div>
+          <div class="item-actions" (click)="$event.stopPropagation()">
+            <button class="action-btn" (click)="openModal(item)">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="action-btn" (click)="deleteItem(item)">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+        <div class="item-content">
+          <p class="item-description">{{ item.description }}</p>
+          <div class="item-meta">
+            <span class="item-type">
+              <i class="fas"
+                 [class.fa-file-alt]="item.type === 'document'"
+                 [class.fa-link]="item.type === 'link'"
+                 [class.fa-key]="item.type === 'credential'"
+                 [class.fa-file]="!item.type"></i>
+            </span>
+            <span>{{ item.updatedAt | date:'short' }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="add-item-btn" (click)="openModal()">
+      <i class="fas fa-plus"></i>
+    </button>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div *ngIf="showModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>{{ selectedItem ? 'Edit Item' : 'Add New Item' }}</h2>
+        <button class="close-btn" (click)="closeModal()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <form (ngSubmit)="saveItem(formData)" #itemForm="ngForm">
+        <div class="form-group">
+          <label for="title">Title</label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            [(ngModel)]="formData.title"
+            required
+            placeholder="Enter title"
+            #title="ngModel"
+          />
+          <div *ngIf="title.invalid && (title.dirty || title.touched)" class="error-message">
+            Title is required
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea
+            id="description"
+            name="description"
+            [(ngModel)]="formData.description"
+            rows="4"
+            placeholder="Enter description"
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="type">Type</label>
+          <select id="type" name="type" [(ngModel)]="formData.type" required #type="ngModel">
+            <option value="document">Document</option>
+            <option value="link">Link</option>
+            <option value="credential">Credential</option>
+          </select>
+          <div *ngIf="type.invalid && (type.dirty || type.touched)" class="error-message">
+            Type is required
+          </div>
+        </div>
+
+        <!-- Link specific fields -->
+        <div class="form-group" *ngIf="formData.type === 'link'">
+          <label for="url">URL</label>
+          <input
+            type="url"
+            id="url"
+            name="url"
+            [(ngModel)]="formData.metadata.url"
+            placeholder="Enter URL"
+          />
+        </div>
+
+        <!-- Credential specific fields -->
+        <div class="form-group" *ngIf="formData.type === 'credential'">
+          <label for="username">Username</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            [(ngModel)]="formData.metadata.username"
+            placeholder="Enter username"
+          />
+        </div>
+
+        <div class="form-group" *ngIf="formData.type === 'credential'">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            [(ngModel)]="formData.metadata.password"
+            placeholder="Enter password"
+          />
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" (click)="closeModal()">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary" [disabled]="!itemForm.form.valid">
+            {{ selectedItem ? 'Update' : 'Add' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- View Modal -->
+  <div *ngIf="showViewModal && selectedItem" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>{{ selectedItem.title }}</h2>
+        <button class="close-btn" (click)="closeViewModal()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="view-content">
+        <div class="view-section">
+          <div class="section-header">
+            <h3>Description</h3>
+            <button class="copy-btn" (click)="copyToClipboard(selectedItem.description)" title="Copy description">
+              <i class="fas fa-copy"></i>
+            </button>
+          </div>
+          <p>{{ selectedItem.description }}</p>
+        </div>
+
+        <div class="view-section" *ngIf="selectedItem.type === 'credential'">
+          <h3>Credentials</h3>
+          <div class="credential-info">
+            <div class="info-row">
+              <span class="label">Username:</span>
+              <div class="value-with-copy">
+                <span class="value">{{ selectedItem.metadata?.username }}</span>
+                <button class="copy-btn" (click)="copyToClipboard(selectedItem.metadata?.username || '')" title="Copy username">
+                  <i class="fas fa-copy"></i>
+                </button>
+              </div>
+            </div>
+            <div class="info-row">
+              <span class="label">Password:</span>
+              <div class="value-with-copy">
+                <span class="value">{{ selectedItem.metadata?.password }}</span>
+                <button class="copy-btn" (click)="copyToClipboard(selectedItem.metadata?.password || '')" title="Copy password">
+                  <i class="fas fa-copy"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="view-section" *ngIf="selectedItem.type === 'link'">
+          <div class="section-header">
+            <h3>URL</h3>
+            <button class="copy-btn" (click)="copyToClipboard(selectedItem.metadata?.url || '')" title="Copy URL">
+              <i class="fas fa-copy"></i>
+            </button>
+          </div>
+          <a [href]="selectedItem.metadata?.url" target="_blank" class="link-url">
+            {{ selectedItem.metadata?.url }}
+          </a>
+        </div>
+
+        <div class="view-section">
+          <h3>Details</h3>
+          <div class="info-row">
+            <span class="label">Type:</span>
+            <span class="value">{{ selectedItem.type }}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Created:</span>
+            <span class="value">{{ selectedItem.createdAt | date:'medium' }}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Last Updated:</span>
+            <span class="value">{{ selectedItem.updatedAt | date:'medium' }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" (click)="closeViewModal()">Close</button>
+        <button class="btn btn-primary" (click)="openModal(selectedItem)">Edit</button>
+      </div>
+    </div>
+  </div>
+</div> 
